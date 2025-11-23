@@ -34,20 +34,44 @@ check_root() {
 
 # --- 2. 自动安装逻辑 ---
 install_script() {
-    CURRENT_PATH=$(realpath "$0")
-    if [[ "$CURRENT_PATH" != "$SCRIPT_PATH" ]]; then
-        log_info "正在安装脚本到系统路径..."
-        cp "$CURRENT_PATH" "$SCRIPT_PATH"
-        chmod +x "$SCRIPT_PATH"
+    # 目标安装路径
+    local INSTALL_PATH="/usr/local/bin/change_ipv6"
+    # 您的脚本在 GitHub 上的真实 RAW 地址
+    local DOWNLOAD_URL="https://raw.githubusercontent.com/NanWu00/acme-onekey/refs/heads/main/change_ipv6_with_prompt.sh"
+
+    # 检查脚本是否已经存在于安装路径
+    if [[ ! -f "$INSTALL_PATH" ]]; then
+        log_info "检测到脚本未安装，正在下载并安装到系统路径..."
         
-        # 添加 alias (先清理旧的，防止重复)
+        # 尝试下载 (支持 curl 和 wget)
+        if command -v curl &> /dev/null; then
+            curl -sSL "$DOWNLOAD_URL" -o "$INSTALL_PATH"
+        elif command -v wget &> /dev/null; then
+            wget -qO "$INSTALL_PATH" "$DOWNLOAD_URL"
+        else
+            log_error "未找到 curl 或 wget，无法自动安装脚本。"
+            return
+        fi
+
+        # 赋予执行权限
+        chmod +x "$INSTALL_PATH"
+        log_success "脚本文件已安装到: $INSTALL_PATH"
+
+        # 配置别名
+        # 先清理旧的，防止重复
         sed -i '/alias "ipv6"=/d' ~/.bashrc
-        echo "$ALIAS_LINE" >> ~/.bashrc
+        sed -i '/alias "change ipv6"=/d' ~/.bashrc
         
-        log_success "脚本安装完成！"
-        log_info "提示：当前会话可能需要执行 'source ~/.bashrc' 才能生效快捷命令。"
-        log_info "但您现在可以直接通过菜单继续操作。"
+        # 写入新别名
+        echo 'alias "ipv6"="/usr/local/bin/change_ipv6"' >> ~/.bashrc
+        
+        log_success "别名 'ipv6' 已添加！"
+        log_warn "请执行 'source ~/.bashrc' 使别名在当前窗口生效，或重新登录 SSH。"
         echo ""
+    else
+        # 如果文件已存在，但用户是通过 curl 运行的，可能是在更新
+        # 这里可以加一个简单的版本检查或跳过，目前保持简单，不做多余操作
+        : 
     fi
 }
 
