@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ==========================================
-# IPv6 修改工具 (Optimized Version)
-# 功能：自动检测网卡，支持永久/临时修改，智能卸载
+# IPv6 管理工具 (v3.0 Auto-Update)
+# 功能：自动/静态/临时 IPv6 配置，智能安装与卸载
 # ==========================================
 
 # --- 颜色定义 ---
@@ -12,11 +12,10 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# --- 全局变量 ---
+# --- 全局配置 ---
 SCRIPT_PATH="/usr/local/bin/change_ipv6"
-ALIAS_COMMAND="ipv6"
-# 定义准确的别名行，用于 grep 和 sed 匹配
-ALIAS_LINE='alias "ipv6"="/usr/local/bin/change_ipv6"'
+# 请确保此 URL 是您仓库中该脚本的 RAW 地址
+DOWNLOAD_URL="https://raw.githubusercontent.com/NanWu00/acme-onekey/refs/heads/main/change_ipv6_with_prompt.sh"
 
 # --- 辅助函数 ---
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -32,138 +31,97 @@ check_root() {
     fi
 }
 
-# --- 2. 自动安装逻辑 ---
+# --- 2. 智能安装逻辑 (支持 curl 管道运行) ---
 install_script() {
-    # 目标安装路径
-    local INSTALL_PATH="/usr/local/bin/change_ipv6"
-    # 您的脚本在 GitHub 上的真实 RAW 地址
-    local DOWNLOAD_URL="https://raw.githubusercontent.com/NanWu00/acme-onekey/refs/heads/main/change_ipv6_with_prompt.sh"
-
-    # 检查脚本是否已经存在于安装路径
-    if [[ ! -f "$INSTALL_PATH" ]]; then
-        log_info "检测到脚本未安装，正在下载并安装到系统路径..."
+    # 检查脚本文件是否存在，或是否大小为0（防止空文件）
+    if [[ ! -s "$SCRIPT_PATH" ]]; then
+        echo ""
+        log_info "检测到脚本未安装，正在下载并安装..."
         
-        # 尝试下载 (支持 curl 和 wget)
+        # 创建目录（如果不存在）
+        mkdir -p $(dirname "$SCRIPT_PATH")
+
+        # 下载文件
         if command -v curl &> /dev/null; then
-            curl -sSL "$DOWNLOAD_URL" -o "$INSTALL_PATH"
+            curl -sSL "$DOWNLOAD_URL" -o "$SCRIPT_PATH"
         elif command -v wget &> /dev/null; then
-            wget -qO "$INSTALL_PATH" "$DOWNLOAD_URL"
+            wget -qO "$SCRIPT_PATH" "$DOWNLOAD_URL"
         else
-            log_error "未找到 curl 或 wget，无法自动安装脚本。"
+            log_error "未找到 curl 或 wget，无法自动安装。"
             return
         fi
 
-        # 赋予执行权限
-        chmod +x "$INSTALL_PATH"
-        log_success "脚本文件已安装到: $INSTALL_PATH"
-
-        # 配置别名
-        # 先清理旧的，防止重复
-        sed -i '/alias "ipv6"=/d' ~/.bashrc
-        sed -i '/alias "change ipv6"=/d' ~/.bashrc
-        
-        # 写入新别名
-        echo 'alias "ipv6"="/usr/local/bin/change_ipv6"' >> ~/.bashrc
-        
-        log_success "别名 'ipv6' 已添加！"
-        log_warn "请执行 'source ~/.bashrc' 使别名在当前窗口生效，或重新登录 SSH。"
-        echo ""
-    else
-        # 如果文件已存在，但用户是通过 curl 运行的，可能是在更新
-        # 这里可以加一个简单的版本检查或跳过，目前保持简单，不做多余操作
-        : 
+        if [[ -s "$SCRIPT_PATH" ]]; then
+            chmod +x "$SCRIPT_PATH"
+            log_success "脚本已安装到: $SCRIPT_PATH"
+            
+            # 配置别名
+            sed -i '/alias "ipv6"=/d' ~/.bashrc
+            sed -i '/alias "change ipv6"=/d' ~/.bashrc
+            echo 'alias "ipv6"="/usr/local/bin/change_ipv6"' >> ~/.bashrc
+            
+            log_success "别名 'ipv6' 已设置。"
+            log_warn "提示：初次安装，请执行 'source ~/.bashrc' 或重新登录以激活快捷命令。"
+            echo ""
+        else
+            log_error "下载失败，请检查网络或 URL。"
+            exit 1
+        fi
     fi
 }
 
-# --- 3. 卸载脚本逻辑 (增强版) ---
+# --- 3. 卸载脚本 ---
 uninstall_script() {
     echo -e "\n${RED}========== 卸载向导 ==========${NC}"
-    log_warn "此操作将执行以下清理："
-    echo "1. 删除脚本文件: $SCRIPT_PATH"
-    echo "2. 移除 ~/.bashrc 中的 'ipv6' 别名"
-    echo "3. 移除系统中的旧别名残留"
+    read -p "确认卸载脚本及别名? (y/n): " CONFIRM
+    if [[ "$CONFIRM" != "y" ]]; then return; fi
     
-    read -p "确认卸载? (y/n): " CONFIRM_UNINSTALL
-    if [[ "$CONFIRM_UNINSTALL" != "y" ]]; then
-        log_info "操作已取消。"
-        return
-    fi
-    
-    # 1. 移除脚本文件
-    if [[ -f "$SCRIPT_PATH" ]]; then
-        rm -f "$SCRIPT_PATH"
-        log_success "脚本文件已删除。"
-    else
-        log_warn "脚本文件不存在，跳过。"
-    fi
-
-    # 2. 清理 .bashrc 中的别名 (包括可能存在的旧版本别名)
-    # 删除 'alias "ipv6"...'
+    rm -f "$SCRIPT_PATH"
     sed -i '/alias "ipv6"=/d' ~/.bashrc
-    # 删除可能残留的 'alias "change ipv6"...'
     sed -i '/alias "change ipv6"=/d' ~/.bashrc
     
-    log_success "配置文件 (.bashrc) 已清理。"
-
-    # 3. 尝试在当前脚本环境中取消别名 (虽然不影响父shell，但为了逻辑完整)
-    unalias ipv6 2>/dev/null
-
-    echo ""
-    log_success "✅ 卸载完成！"
-    log_info "现在输入 'ipv6' 命令将不再生效 (提示 'No such file')。"
-    log_info "下次重新登录 SSH 后，别名定义将彻底从内存中消失。"
+    log_success "卸载完成！"
+    log_info "脚本文件已删除，别名已清理。"
+    log_info "无需额外操作，'ipv6' 命令已失效。"
     exit 0
 }
 
 # --- 4. 环境检测 ---
 detect_environment() {
-    # 自动检测主要网络接口
+    # 检测接口
     INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
     if [[ -z "$INTERFACE" ]]; then
         INTERFACE=$(ip -6 route | grep default | awk '{print $5}' | head -n1)
     fi
 
     if [[ -z "$INTERFACE" ]]; then
-        log_error "无法自动检测到网络接口，请手动检查网络配置。"
+        log_error "无法检测到网络接口。"
         exit 1
     fi
 
-    # 获取当前 IPv6
+    # 检测当前 IPv6 和网关
     CURRENT_IPV6=$(ip -6 addr show dev "$INTERFACE" | grep "inet6" | grep "global" | awk '{print $2}' | head -n1)
-    # 获取当前 IPv6 网关
     GATEWAY=$(ip -6 route show default dev "$INTERFACE" | awk '{print $3}' | head -n1)
 }
 
-# --- 5. 用户交互获取新的 IPv6 ---
+# --- 5. 输入处理 ---
 prompt_new_ipv6() {
     echo ""
     log_info "当前接口: ${GREEN}$INTERFACE${NC}"
-    if [[ -n "$CURRENT_IPV6" ]]; then
-        echo -e "当前 IP: ${YELLOW}$CURRENT_IPV6${NC}"
-    fi
-    
     while true; do
         echo -e "${BLUE}请输入新的 IPv6 地址 (例如: 2001:db8::1/64)${NC}"
         read -p "IPv6 Address: " NEW_IPV6_INPUT
+        NEW_IPV6_INPUT=$(echo "$NEW_IPV6_INPUT" | xargs)
+        [[ -z "$NEW_IPV6_INPUT" ]] && continue
         
-        NEW_IPV6_INPUT=$(echo "$NEW_IPV6_INPUT" | xargs) # 去除空格
-
-        if [[ -z "$NEW_IPV6_INPUT" ]]; then
-            log_error "输入不能为空。"
-            continue
+        # 简单校验
+        if [[ ! "$NEW_IPV6_INPUT" =~ : ]]; then
+             log_error "格式错误。"
+             continue
         fi
-
-        # 基础格式校验
-        if [[ ! "$NEW_IPV6_INPUT" =~ ^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}(/[0-9]{1,3})?$ ]]; then
-             log_error "格式错误，请检查。"
-             read -p "是否强制使用? (y/n): " CONFIRM
-             [[ "$CONFIRM" != "y" ]] && continue
-        fi
-        
         break
     done
 
-    # 默认补全 /64
     if [[ "$NEW_IPV6_INPUT" == *"/"* ]]; then
         NEW_IPV6_FULL="$NEW_IPV6_INPUT"
     else
@@ -171,74 +129,56 @@ prompt_new_ipv6() {
     fi
 }
 
-# --- 6. 执行临时修改 ---
+# --- 6. 临时修改 ---
 apply_temporary_change() {
     prompt_new_ipv6
+    log_info "正在应用临时修改..."
     
-    echo ""
-    log_info "正在应用 [临时修改]..."
+    [[ -n "$CURRENT_IPV6" ]] && ip -6 addr del "$CURRENT_IPV6" dev "$INTERFACE" 2>/dev/null
     
-    # 删旧
-    if [[ -n "$CURRENT_IPV6" ]]; then
-        ip -6 addr del "$CURRENT_IPV6" dev "$INTERFACE" 2>/dev/null || true
-    fi
-
-    # 加新
     if ip -6 addr add "$NEW_IPV6_FULL" dev "$INTERFACE"; then
-        log_success "临时 IP 已生效。"
+        log_success "临时 IP 已添加。"
+        # 尝试恢复网关
+        [[ -n "$GATEWAY" ]] && ip -6 route add default via "$GATEWAY" dev "$INTERFACE" 2>/dev/null
+        verify_connectivity
     else
-        log_error "IP 添加失败！"
-        exit 1
+        log_error "添加失败。"
     fi
-
-    # 修复网关
-    if [[ -n "$GATEWAY" ]]; then
-        if ! ip -6 route show default | grep -q "$GATEWAY"; then
-            ip -6 route add default via "$GATEWAY" dev "$INTERFACE" || true
-        fi
-    fi
-
-    verify_connectivity
 }
 
-# --- 7. 执行永久修改 (智能判断) ---
+# --- 7. 永久静态修改 ---
 apply_permanent_change() {
     prompt_new_ipv6
-    
     echo ""
-    log_warn "即将修改系统配置文件以实现 [永久生效]。"
-    read -p "确认执行? (y/n): " CONFIRM_PERM
-    if [[ "$CONFIRM_PERM" != "y" ]]; then return; fi
+    log_warn "正在修改配置文件设置为 [静态 IPv6]..."
     
-    # 1. NetworkManager
+    # NetworkManager
     if command -v nmcli &> /dev/null && nmcli device status | grep -q "$INTERFACE"; then
-        log_info "检测到 NetworkManager，正在配置..."
         nmcli connection modify "$INTERFACE" ipv6.addresses "$NEW_IPV6_FULL" ipv6.method manual
         nmcli connection up "$INTERFACE"
-        log_success "NetworkManager 配置完成。"
-        
-    # 2. Netplan (Ubuntu 18.04+)
+        log_success "NetworkManager 配置已更新。"
+
+    # Netplan
     elif [[ -d "/etc/netplan" ]]; then
-        log_info "检测到 Netplan，正在生成配置..."
-        NETPLAN_FILE="/etc/netplan/01-ipv6-static.yaml"
-cat > "$NETPLAN_FILE" << EOF
+        local FILE="/etc/netplan/01-ipv6-static.yaml"
+cat > "$FILE" << EOF
 network:
   version: 2
   ethernets:
     $INTERFACE:
       dhcp6: false
+      accept-ra: false
       addresses:
         - $NEW_IPV6_FULL
-      # routes:
-      #   - to: default
-      #     via: YOUR_GATEWAY
 EOF
         netplan apply
-        log_success "Netplan 配置已应用 (网关需手动检查 YAML)。"
+        log_success "Netplan 配置已更新 ($FILE)。"
 
-    # 3. /etc/network/interfaces (Debian/Old Ubuntu)
+    # Interfaces
     elif [[ -f "/etc/network/interfaces" ]]; then
-        log_info "检测到 interfaces 文件，正在追加配置..."
+        # 先清理旧配置
+        sed -i '/# Added by ipv6 script/,/# End of ipv6 script/d' "/etc/network/interfaces"
+        
         cp "/etc/network/interfaces" "/etc/network/interfaces.bak"
 cat >> "/etc/network/interfaces" << EOF
 
@@ -246,68 +186,118 @@ cat >> "/etc/network/interfaces" << EOF
 iface $INTERFACE inet6 static
 address ${NEW_IPV6_FULL%%/*}
 netmask ${NEW_IPV6_FULL##*/}
-# gateway YOUR_GATEWAY
+# gateway YOUR_GATEWAY_HERE
+# End of ipv6 script
 EOF
-        # 尝试立即生效
-        if [[ -n "$CURRENT_IPV6" ]]; then ip -6 addr del "$CURRENT_IPV6" dev "$INTERFACE" 2>/dev/null; fi
+        # 尝试重载 (不一定成功，建议重启)
+        ip -6 addr flush dev "$INTERFACE"
+        if [[ -f /etc/init.d/networking ]]; then /etc/init.d/networking restart; fi
         ip -6 addr add "$NEW_IPV6_FULL" dev "$INTERFACE"
-        
-        log_success "Interfaces 配置已添加 (需重启网络服务或机器以完全验证)。"
+        log_success "Interfaces 配置已添加 (建议重启服务器验证)。"
     else
-        log_error "未识别的网络配置系统，请手动修改。"
-        exit 1
+        log_error "未识别的配置系统。"
+        return
+    fi
+    verify_connectivity
+}
+
+# --- 8. 自动获取 IPv6 (NEW) ---
+apply_auto_ipv6() {
+    echo ""
+    log_info "正在将 IPv6 恢复为 [自动获取 (DHCP/SLAAC)]..."
+    read -p "确认执行? (y/n): " CONFIRM
+    if [[ "$CONFIRM" != "y" ]]; then return; fi
+
+    # NetworkManager
+    if command -v nmcli &> /dev/null && nmcli device status | grep -q "$INTERFACE"; then
+        # 清除静态地址并设为 auto
+        nmcli connection modify "$INTERFACE" ipv6.method auto ipv6.addresses "" ipv6.gateway ""
+        nmcli connection up "$INTERFACE"
+        log_success "NetworkManager 已设置为自动获取。"
+
+    # Netplan
+    elif [[ -d "/etc/netplan" ]]; then
+        # 覆盖之前的静态配置文件
+        local FILE="/etc/netplan/01-ipv6-static.yaml"
+cat > "$FILE" << EOF
+network:
+  version: 2
+  ethernets:
+    $INTERFACE:
+      dhcp6: true
+      accept-ra: true
+EOF
+        netplan apply
+        log_success "Netplan 已设置为自动获取。"
+
+    # Interfaces
+    elif [[ -f "/etc/network/interfaces" ]]; then
+        # 删除脚本添加的静态块
+        sed -i '/# Added by ipv6 script/,/# End of ipv6 script/d' "/etc/network/interfaces"
+        
+        # 追加自动配置 (可选，通常删除静态配置后系统默认会尝试 auto，这里显式添加以防万一)
+        # 注意：如果主配置里已经有 iface inet6 auto，这里可能会冲突，所以更安全的做法是只删除静态块
+        # 或者是追加一个 auto 块
+cat >> "/etc/network/interfaces" << EOF
+
+# Added by ipv6 script
+iface $INTERFACE inet6 auto
+# End of ipv6 script
+EOF
+        log_success "Interfaces 已恢复为自动配置 (需重启生效)。"
+        log_warn "正在尝试刷新网络..."
+        systemctl restart networking 2>/dev/null || /etc/init.d/networking restart 2>/dev/null
+    else
+        log_error "无法自动配置，请手动修改配置文件。"
+        return
     fi
     
     verify_connectivity
 }
 
-# --- 8. 验证 ---
+# --- 9. 验证 ---
 verify_connectivity() {
     echo ""
-    log_info "验证连通性 (Ping Google IPv6)..."
+    log_info "检查网络连通性..."
+    sleep 2 # 等待接口重置
     if ping6 -c 2 -W 2 google.com &> /dev/null; then
-        log_success "网络通畅！"
+        log_success "IPv6 网络通畅！"
     else
-        log_warn "Ping 失败。请检查网关设置或防火墙。"
-        if [[ -n "$GATEWAY" ]]; then
-            log_info "尝试 Ping 网关 ($GATEWAY)..."
-            ping6 -c 2 -W 2 "$GATEWAY"
-        fi
+        log_warn "Ping 失败。如果是自动获取，可能需要等待几秒或重启。"
     fi
 }
 
-# --- 9. 主菜单 ---
+# --- 10. 主菜单 ---
 main_menu() {
     check_root
     
-    # 自安装检查
-    if [[ "$0" == *change_ipv6* ]]; then
-        install_script
-    fi
+    # 无论如何运行，先确保安装和下载
+    install_script
 
     detect_environment
 
     while true; do
-        echo -e "\n${BLUE}========== IPv6 管理工具 ==========${NC}"
-        echo -e "当前 IP: ${YELLOW}${CURRENT_IPV6:-未检测到}${NC}"
+        echo -e "\n${BLUE}========== IPv6 配置工具 ==========${NC}"
+        echo -e "接口: ${GREEN}$INTERFACE${NC} | 当前IP: ${YELLOW}${CURRENT_IPV6:-未检测到}${NC}"
         echo "---"
-        echo -e "1. ${GREEN}永久更改 IP${NC} (推荐)"
-        echo -e "2. ${YELLOW}临时更改 IP${NC} (重启失效)"
-        echo -e "3. ${RED}卸载脚本${NC} (移除别名和文件)"
+        echo -e "1. ${GREEN}设置静态 IP (永久)${NC}"
+        echo -e "2. ${YELLOW}设置静态 IP (临时)${NC}"
+        echo -e "3. ${BLUE}设置自动获取 (DHCP/SLAAC)${NC}"
+        echo -e "4. ${RED}卸载脚本${NC}"
         echo -e "0. 退出"
         echo "---"
-        read -p "请输入选项 [0-3]: " CHOICE
+        read -p "请选择 [0-4]: " CHOICE
         
         case "$CHOICE" in
             1) apply_permanent_change ;;
             2) apply_temporary_change ;;
-            3) uninstall_script ;;
+            3) apply_auto_ipv6 ;;
+            4) uninstall_script ;;
             0) exit 0 ;;
-            *) log_error "无效选项" ;;
+            *) log_error "无效输入" ;;
         esac
-        
         echo ""
-        read -p "按回车键返回菜单..."
+        read -p "按回车继续..."
     done
 }
 
