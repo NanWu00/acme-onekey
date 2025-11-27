@@ -141,6 +141,16 @@ else
     echo -e "已跳过定时任务设置。"
 fi
 
+# 7. 自动设置快捷命令 'sub'
+echo -e "\n${YELLOW}正在设置快捷命令 'sub'...${PLAIN}"
+ALIAS_COMMAND="alias sub='bash $UPDATER_SCRIPT'"
+
+# 将别名定义写入配置文件 (通常是 ~/.bashrc)
+echo "$ALIAS_COMMAND" >> ~/.bashrc
+
+echo -e "${GREEN}快捷命令 'sub' 已设置！${PLAIN}"
+echo -e "提示: 当前会话请手动运行 ${YELLOW}source ~/.bashrc${PLAIN} 以立即使用 'sub' 命令。"
+
 # 结束
 # 获取本机 IP 用于展示
 IPV4=$(curl -s4m8 ip.sb)
